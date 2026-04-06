@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Daily Tracker · unified</title>
+  <!-- Chart.js (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* === styles consolidated === */
+    *{box-sizing:border-box;margin:0}
+    body{
+      margin:0;
+      font-family:system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background:#020617;
+      color:white;
+      display:flex;
+      flex-direction:column;
+      min-height:100vh;
+    }
+    header{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:space-between;
+      align-items:center;
+      padding:16px 20px;
+      border-bottom:1px solid #1e293b;
+      gap:10px;
+    }
+    header h1{font-size:1.8rem;letter-spacing:1px;color:#facc15}
+    #clock{font-family:monospace;background:#0f172a;padding:6px 14px;border-radius:40px;font-size:1rem;color:#cbd5e1}
+    nav{display:flex;flex-wrap:wrap;gap:6px;}
+    nav button{
+      padding:8px 14px;
+      background:#1e293b;
+      border:none;
+      color:#e2e8f0;
+      cursor:pointer;
+      border-radius:30px;
+      font-weight:500;
+      transition:0.1s;
+      border:1px solid transparent;
+    }
+    nav button.active{
+      background:#22c55e;
+      color:#020617;
+      font-weight:600;
+      border-color:#86efac;
+    }
+    main{flex:1; padding:20px;}
+    .view{display:none; padding:8px 0 20px;}
+    .view.active{display:block;}
+
+    /* dashboard */
+    canvas{max-width:100%; background:#0f172a; border-radius:24px; padding:16px; margin-top:10px;}
+
+    /* habits */
+    #habitTable{width:100%; border-collapse:collapse; background:#0f172a; border-radius:16px; overflow:hidden;}
+    #habitTable th{background:#1e293b; color:#facc15; font-weight:600;}
+    #habitTable td,#habitTable th{border:1px solid #334155; padding:8px; text-align:center;}
+    #habitTable input[type=checkbox]{transform:scale(1.2); accent-color:#22c55e;}
+    #habitTable button{margin:2px; background:#2d3a4e; border:none; color:white; padding:4px 8px; border-radius:12px; cursor:pointer;}
+
+    /* tasks */
+    #taskList{list-style:none; padding:0;}
+    #taskList li{
+      background:#0f172a; margin:8px 0; padding:12px 16px; border-radius:40px;
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    }
+    .done{text-decoration:line-through; opacity:0.6; background:#1e293b !important;}
+    #taskList button{background:#2d3a4e; border:none; color:white; padding:4px 12px; border-radius:20px; cursor:pointer;}
+
+    /* calendar */
+    #calendarGrid{
+      display:grid;
+      grid-template-columns:repeat(7,1fr);
+      gap:8px;
+      background:#0f172a;
+      padding:20px;
+      border-radius:32px;
+    }
+    .day{
+      background:#1e293b;
+      padding:12px 6px;
+      min-height:80px;
+      border-radius:18px;
+      text-align:center;
+      font-weight:500;
+    }
+    .header{background:#020617; color:#facc15; font-weight:bold; text-align:center; border:1px solid #334155;}
+    .empty{background:transparent; box-shadow:none;}
+    .today{background:#22c55e; color:black; font-weight:bold;}
+    .reminder{font-size:11px; color:#facc15; margin-top:5px; word-break:break-word;}
+    .reminderBox{margin-top:20px; display:flex; gap:10px; flex-wrap:wrap;}
+    .reminderBox input, .reminderBox select, .reminderBox button{padding:10px; border-radius:30px; border:none; background:#1e293b; color:white;}
+
+    /* diary */
+    textarea{width:100%; height:130px; background:#0f172a; border:1px solid #334155; border-radius:24px; padding:16px; color:white; font-size:1rem;}
+    #diaryList{list-style:none; padding:0;}
+    #diaryList li{background:#0f172a; margin:12px 0; padding:16px; border-radius:28px;}
+    #diaryList button{background:#2d3a4e; border:none; color:white; padding:5px 14px; border-radius:20px; margin-right:6px;}
+
+    /* finance */
+    #financeList li{background:#0f172a; margin:8px 0; padding:12px 16px; border-radius:40px; display:flex; flex-wrap:wrap; gap:8px;}
+    #financeSummary{background:#1e293b; padding:12px; border-radius:30px; display:inline-block;}
+
+    /* inputs generic */
+    input, select, button{background:#0f172a; border:1px solid #334155; color:white; padding:10px 16px; border-radius:40px; outline:none;}
+    button{background:#22c55e; color:#020617; font-weight:bold; border:none; cursor:pointer; transition:0.1s;}
+    button:hover{opacity:0.9;}
+
+    footer{
+      text-align:center;
+      padding:20px;
+      color:#94a3b8;
+      border-top:1px solid #1e293b;
+      font-size:0.9rem;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>⚡ DAILY TRACKER</h1>
+  <div id="clock"></div>
+  <nav>
+    <button class="navbtn active" data-view="dashboard">Dashboard</button>
+    <button class="navbtn" data-view="habits">Habits</button>
+    <button class="navbtn" data-view="tasks">Today's Tasks</button>
+    <button class="navbtn" data-view="calendar">Calendar</button>
+    <button class="navbtn" data-view="diary">Diary</button>
+    <button class="navbtn" data-view="finance">Finance</button>
+  </nav>
+</header>
+
+<main>
+  <!-- dashboard -->
+  <section id="dashboard" class="view active">
+    <h2>📊 Weekly productivity</h2>
+    <canvas id="weeklyChart"></canvas>
+  </section>
+
+  <!-- habits -->
+  <section id="habits" class="view">
+    <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+      <input id="habitInput" placeholder="e.g. workout, read" style="flex:1;">
+      <button id="addHabitBtn">➕ Add habit</button>
+    </div>
+    <table id="habitTable"></table>
+    <p style="margin-top:12px; color:#94a3b8; font-size:0.9rem;">✔️ check only today's date enabled – past/future locked</p>
+  </section>
+
+  <!-- tasks -->
+  <section id="tasks" class="view">
+    <h2>📝 Today's tasks</h2>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <input id="taskInput" placeholder="write a task ..." style="flex:1;">
+      <button id="addTaskBtn">➕ Add task</button>
+    </div>
+    <ul id="taskList"></ul>
+  </section>
+
+  <!-- calendar -->
+  <section id="calendar" class="view">
+    <h2 id="monthTitle"></h2>
+    <div id="calendarGrid"></div>
+    <div class="reminderBox">
+      <input type="date" id="reminderDate" value="">
+      <input id="reminderText" placeholder="📌 reminder (e.g. call)">
+      <button id="addReminderBtn">➕ Add reminder</button>
+    </div>
+  </section>
+
+  <!-- diary -->
+  <section id="diary" class="view">
+    <textarea id="diaryText" placeholder="✍️ Write your diary entry ..."></textarea>
+    <button id="saveDiaryBtn" style="margin:12px 0;">💾 Save entry</button>
+    <ul id="diaryList"></ul>
+  </section>
+
+  <!-- finance -->
+  <section id="finance" class="view">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <input id="amountInput" type="number" placeholder="amount" style="width:110px;">
+      <select id="typeInput">
+        <option>Income</option>
+        <option>Expense</option>
+      </select>
+      <input id="descInput" placeholder="description (e.g. coffee)">
+      <button id="addFinanceBtn">➕ Add</button>
+    </div>
+    <ul id="financeList"></ul>
+    <h3 id="financeSummary">💰 Monthly result: 0</h3>
+  </section>
+</main>
+
+<footer>
+  Built by Mohd Waseeq Siddiqui · unified tracker
+</footer>
+
+<script>
+  (function() {
+    // ---------- LOCAL STORAGE ----------
+    let habits = JSON.parse(localStorage.getItem('habits')) || [];
+    let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+    let diary = JSON.parse(localStorage.getItem('diary')) || [];
+    let finance = JSON.parse(localStorage.getItem('finance')) || [];
+    let reminders = JSON.parse(localStorage.getItem('reminders')) || {};   // key = day number
+
+    function saveData() {
+      localStorage.setItem('habits', JSON.stringify(habits));
+      localStorage.setItem('tasks', JSON.stringify(tasks));
+      localStorage.setItem('diary', JSON.stringify(diary));
+      localStorage.setItem('finance', JSON.stringify(finance));
+      localStorage.setItem('reminders', JSON.stringify(reminders));
+    }
+
+    // ---------- NAVIGATION ----------
+    document.querySelectorAll('.navbtn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.navbtn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const viewId = btn.dataset.view;
+        document.getElementById(viewId).classList.add('active');
+      });
+    });
+
+    // ---------- CLOCK ----------
+    function updateClock() {
+      document.getElementById('clock').textContent = new Date().toLocaleString();
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // ---------- HABITS ----------
+    document.getElementById('addHabitBtn').addEventListener('click', () => {
+      const name = document.getElementById('habitInput').value.trim();
+      if (!name) return;
+      habits.push({ name, days: {} });
+      document.getElementById('habitInput').value = '';
+      saveData();
+      renderHabits();
+    });
+
+    function toggleHabit(i, day) {
+      habits[i].days[day] = !habits[i].days[day];
+      saveData();
+      renderHabits(); // re-render to reflect checkbox state
+    }
+
+    function editHabit(i) {
+      const name = prompt('Edit habit name:', habits[i].name);
+      if (name && name.trim()) {
+        habits[i].name = name.trim();
+        saveData();
+        renderHabits();
+      }
+    }
+
+    function deleteHabit(i) {
+      if (confirm('Delete habit?')) {
+        habits.splice(i, 1);
+        saveData();
+        renderHabits();
+      }
+    }
+
+    function renderHabits() {
+      let html = '<tr><th>Habit</th>';
+      for (let d = 1; d <= 31; d++) html += `<th>${d}</th>`;
+      html += '<th>Actions</th></tr>';
+
+      const todayDate = new Date().getDate();  // day of month (1-31)
+
+      habits.forEach((h, i) => {
+        html += `<tr><td>${h.name}</td>`;
+        for (let d = 1; d <= 31; d++) {
+          const checked = h.days[d] ? 'checked' : '';
+          const disabled = (d !== todayDate) ? 'disabled' : '';
+          html += `<td><input type="checkbox" ${checked} ${disabled} onclick="toggleHabit(${i},${d})"></td>`;
+        }
+        html += `<td>
+          <button onclick="editHabit(${i})">✎ Edit</button>
+          <button onclick="deleteHabit(${i})">🗑️ Del</button>
+        </td></tr>`;
+      });
+      document.getElementById('habitTable').innerHTML = html;
+    }
+
+    // attach global for inline handlers
+    window.toggleHabit = toggleHabit;
+    window.editHabit = editHabit;
+    window.deleteHabit = deleteHabit;
+
+    // ---------- TASKS ----------
+    document.getElementById('addTaskBtn').addEventListener('click', () => {
+      const text = document.getElementById('taskInput').value.trim();
+      if (!text) return;
+      tasks.push({ text, done: false });
+      document.getElementById('taskInput').value = '';
+      saveData();
+      renderTasks();
+      updateChart();
+    });
+
+    window.toggleTask = (i) => {
+      tasks[i].done = !tasks[i].done;
+      saveData();
+      renderTasks();
+      updateChart();
+    };
+
+    window.editTask = (i) => {
+      const newText = prompt('Edit task:', tasks[i].text);
+      if (newText && newText.trim()) {
+        tasks[i].text = newText.trim();
+        saveData();
+        renderTasks();
+        updateChart();  // percent may change if text changed, but done flag same
+      }
+    };
+
+    window.deleteTask = (i) => {
+      if (confirm('Delete task?')) {
+        tasks.splice(i, 1);
+        saveData();
+        renderTasks();
+        updateChart();
+      }
+    };
+
+    function renderTasks() {
+      const ul = document.getElementById('taskList');
+      ul.innerHTML = '';
+      tasks.forEach((t, i) => {
+        const li = document.createElement('li');
+        li.className = t.done ? 'done' : '';
+        li.innerHTML = `${t.text} 
+          <button onclick="toggleTask(${i})">✓</button>
+          <button onclick="editTask(${i})">✎ Edit</button>
+          <button onclick="deleteTask(${i})">🗑️ Del</button>`;
+        ul.appendChild(li);
+      });
+    }
+
+    // ---------- CALENDAR ----------
+    function renderCalendar() {
+      const grid = document.getElementById('calendarGrid');
+      grid.innerHTML = '';
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const firstDay = new Date(year, month, 1).getDay(); // 0 = Sunday
+
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      dayNames.forEach(day => {
+        const div = document.createElement('div');
+        div.className = 'day header';
+        div.textContent = day;
+        grid.appendChild(div);
+      });
+
+      for (let i = 0; i < firstDay; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'day empty';
+        grid.appendChild(empty);
+      }
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const div = document.createElement('div');
+        div.className = 'day';
+        if (d === today.getDate()) div.classList.add('today');
+        const reminderText = reminders[d] ? `<div class="reminder">📌 ${reminders[d]}</div>` : '';
+        div.innerHTML = `<b>${d}</b>${reminderText}`;
+        grid.appendChild(div);
+      }
+
+      document.getElementById('monthTitle').textContent = 
+        today.toLocaleString('default', { month: 'long' }) + ' ' + year;
+    }
+
+    document.getElementById('addReminderBtn').addEventListener('click', () => {
+      const dateInput = document.getElementById('reminderDate').value;
+      if (!dateInput) return alert('Pick a date');
+      const day = new Date(dateInput).getDate();
+      const text = document.getElementById('reminderText').value.trim();
+      if (!text) return;
+      reminders[day] = text;
+      saveData();
+      renderCalendar();
+      document.getElementById('reminderText').value = '';
+    });
+
+    // ---------- DIARY ----------
+    document.getElementById('saveDiaryBtn').addEventListener('click', () => {
+      const text = document.getElementById('diaryText').value.trim();
+      if (!text) return;
+      const now = new Date();
+      diary.push({
+        date: now.toLocaleDateString(),
+        time: now.toLocaleTimeString(),
+        text
+      });
+      document.getElementById('diaryText').value = '';
+      saveData();
+      renderDiary();
+    });
+
+    window.editDiary = (i) => {
+      const newText = prompt('Edit diary entry:', diary[i].text);
+      if (newText && newText.trim()) {
+        diary[i].text = newText.trim();
+        saveData();
+        renderDiary();
+      }
+    };
+
+    window.deleteDiary = (i) => {
+      if (confirm('Delete this entry?')) {
+        diary.splice(i, 1);
+        saveData();
+        renderDiary();
+      }
+    };
+
+    function renderDiary() {
+      const ul = document.getElementById('diaryList');
+      ul.innerHTML = '';
+      diary.slice().reverse().forEach((d, idx) => {   // show newest first, but original index?
+        // we need original index for edit/delete. use index from reversed? simpler: use original array order but show reversed.
+        // safer: work with original index.
+        // we'll just iterate original but we want newest first: reorder?
+        // keep it simple: show in order of addition (oldest first). but we can map reversed index.
+        // easier: use for loop from end.
+      });
+      // better: keep original index mapping. we create fresh from 0..length-1
+      for (let i = diary.length-1; i >=0; i--) {
+        const d = diary[i];
+        const li = document.createElement('li');
+        li.innerHTML = `<b>${d.date} ${d.time}</b><p>${d.text}</p>
+          <button onclick="editDiary(${i})">✎ Edit</button>
+          <button onclick="deleteDiary(${i})">🗑️ Del</button>`;
+        ul.appendChild(li);
+      }
+    }
+
+    // ---------- FINANCE ----------
+    document.getElementById('addFinanceBtn').addEventListener('click', () => {
+      const amount = parseFloat(document.getElementById('amountInput').value);
+      const type = document.getElementById('typeInput').value;
+      const desc = document.getElementById('descInput').value.trim();
+      if (isNaN(amount) || !desc) return alert('Enter amount and description');
+      finance.push({ amount, type, desc, date: new Date().toLocaleDateString() });
+      document.getElementById('amountInput').value = '';
+      document.getElementById('descInput').value = '';
+      saveData();
+      renderFinance();
+    });
+
+    window.editFinance = (i) => {
+      const newAmount = prompt('Edit amount', finance[i].amount);
+      const newDesc = prompt('Edit description', finance[i].desc);
+      if (newAmount !== null && !isNaN(parseFloat(newAmount))) finance[i].amount = parseFloat(newAmount);
+      if (newDesc !== null && newDesc.trim()) finance[i].desc = newDesc.trim();
+      saveData();
+      renderFinance();
+    };
+
+    window.deleteFinance = (i) => {
+      if (confirm('Delete entry?')) {
+        finance.splice(i, 1);
+        saveData();
+        renderFinance();
+      }
+    };
+
+    function renderFinance() {
+      const ul = document.getElementById('financeList');
+      ul.innerHTML = '';
+      let income = 0, expense = 0;
+      finance.forEach((f, i) => {
+        ul.innerHTML += `<li>${f.date} · ${f.type} · ₹${f.amount} (${f.desc})
+          <button onclick="editFinance(${i})">✎</button>
+          <button onclick="deleteFinance(${i})">🗑️</button>
+        </li>`;
+        if (f.type === 'Income') income += f.amount;
+        else expense += f.amount;
+      });
+      document.getElementById('financeSummary').textContent = `💰 Monthly result: ₹${income - expense}`;
+    }
+
+    // ---------- DASHBOARD CHART ----------
+    const ctx = document.getElementById('weeklyChart').getContext('2d');
+    let weeklyPercent = [0, 0, 0, 0, 0, 0, 0];  // sun-sat
+
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+        datasets: [{
+          label: 'Daily completion %',
+          data: weeklyPercent,
+          backgroundColor: '#22c55e',
+          borderRadius: 10
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }
+        },
+        plugins: { legend: { labels: { color: 'white' } } }
+      }
+    });
+
+    function updateChart() {
+      const completed = tasks.filter(t => t.done).length;
+      const total = tasks.length;
+      const percent = total ? Math.round((completed / total) * 100) : 0;
+      const todayIndex = new Date().getDay();  // 0 sun .. 6 sat
+      weeklyPercent[todayIndex] = percent;
+      chart.data.datasets[0].data = weeklyPercent;
+      chart.update();
+    }
+
+    // expose chart update globally
+    window.updateChart = updateChart;
+
+    // ---------- INITIAL RENDER ----------
+    renderHabits();
+    renderTasks();
+    renderDiary();
+    renderFinance();
+    renderCalendar();
+    updateChart();
+
+    // fix reminder date default to today
+    const todayForInput = new Date().toISOString().slice(0,10);
+    document.getElementById('reminderDate').value = todayForInput;
+  })();
+</script>
+</body>
+</html>
